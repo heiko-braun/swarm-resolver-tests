@@ -46,6 +46,7 @@ public class AetherDemo implements Demo {
         List<Dependency> aetherDeps = explicitDeps
                 .stream()
                 .map( d -> {
+                    // TODO: currently fails to resolve dependencyManagement sections (and very likely others parts as well, i.e. properties, etc)
                     String version = d.getVersion() !=null ? d.getVersion() : "2017.1.0-SNAPSHOT";
                     DefaultArtifact a = new DefaultArtifact(d.getGroupId(), d.getArtifactId(), d.getType(), version);
                     return new Dependency(a, d.getScope());
