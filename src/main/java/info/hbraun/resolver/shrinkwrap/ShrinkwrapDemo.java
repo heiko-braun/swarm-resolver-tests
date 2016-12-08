@@ -8,6 +8,7 @@ import java.util.Arrays;
 import info.hbraun.resolver.Demo;
 import org.eclipse.aether.DefaultRepositoryCache;
 import org.eclipse.aether.DefaultRepositorySystemSession;
+import org.eclipse.aether.repository.RepositoryPolicy;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
@@ -149,7 +150,8 @@ public class ShrinkwrapDemo implements Demo {
         }
 
         session(resolver).setCache(new DefaultRepositoryCache());
-
+        session(resolver).setUpdatePolicy(RepositoryPolicy.UPDATE_POLICY_DAILY);
+        session(resolver).setChecksumPolicy(RepositoryPolicy.CHECKSUM_POLICY_IGNORE);
         return resolver;
     }
 
