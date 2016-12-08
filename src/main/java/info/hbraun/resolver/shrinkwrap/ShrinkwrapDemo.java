@@ -1,9 +1,13 @@
 package info.hbraun.resolver.shrinkwrap;
 
 import java.io.File;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 
 import info.hbraun.resolver.Demo;
+import org.eclipse.aether.DefaultRepositoryCache;
+import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
@@ -13,6 +17,9 @@ import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenChecksumPolicy;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepositories;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepository;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenUpdatePolicy;
+import org.jboss.shrinkwrap.resolver.impl.maven.ConfigurableMavenWorkingSessionImpl;
+import org.jboss.shrinkwrap.resolver.impl.maven.MavenWorkingSessionContainer;
+import org.wildfly.swarm.arquillian.resolver.FailureReportingTransferListener;
 import org.wildfly.swarm.arquillian.resolver.ShrinkwrapArtifactResolvingHelper;
 import org.wildfly.swarm.spi.api.internal.SwarmInternalProperties;
 import org.wildfly.swarm.tools.ArtifactSpec;
@@ -22,10 +29,17 @@ import org.wildfly.swarm.tools.ArtifactSpec;
  * @since 06/12/2016
  */
 public class ShrinkwrapDemo implements Demo {
+
+
+    public final static ConfigurableMavenResolverSystem RESOLVER_INSTANCE = createResolver();
+
     @Override
     public void execute(File pomFile) throws Exception {
 
-        ConfigurableMavenResolverSystem resolver = createResolver();
+        ConfigurableMavenResolverSystem resolver = RESOLVER_INSTANCE;
+
+        DefaultRepositorySystemSession session = ShrinkwrapDemo.session(resolver);
+        session.setTransferListener(new FailureReportingTransferListener());
 
         ShrinkwrapArtifactResolvingHelper resolvingHelper = new ShrinkwrapArtifactResolvingHelper(resolver);
         PomEquippedResolveStage pomEquipped = loadPom(resolver, pomFile);
@@ -108,16 +122,16 @@ public class ShrinkwrapDemo implements Demo {
 
         String localM2 = System.getProperty("user.home") + File.separator + ".m2" + File.separator + "repository/";
         MavenRemoteRepository local =
-                       MavenRemoteRepositories.createRemoteRepository("local",
-                                                                      "file://"+localM2,
-                                                                      "default");
+                MavenRemoteRepositories.createRemoteRepository("local",
+                                                               "file://"+localM2,
+                                                               "default");
         local.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
         local.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_ALWAYS);
 
         Boolean offline = Boolean.valueOf(System.getProperty("swarm.resolver.offline", "false"));
         final ConfigurableMavenResolverSystem resolver = Maven.configureResolver()
                 .withMavenCentralRepo(true)
-                .withRemoteRepo(local)
+                //.withRemoteRepo(local)
                 .withRemoteRepo(jbossPublic)
                 .withRemoteRepo(gradleTools)
                 .workOffline(offline);
@@ -134,6 +148,24 @@ public class ShrinkwrapDemo implements Demo {
                     });
         }
 
+        session(resolver).setCache(new DefaultRepositoryCache());
+
         return resolver;
     }
+
+    public static DefaultRepositorySystemSession session(ConfigurableMavenResolverSystem resolver) {
+        return (DefaultRepositorySystemSession) invokeWorkingSessionMethod(resolver, "getSession");
+    }
+
+    private static Object invokeWorkingSessionMethod(ConfigurableMavenResolverSystem resolver, final String methodName) {
+        try {
+            final Method method = ConfigurableMavenWorkingSessionImpl.class.getDeclaredMethod(methodName);
+            method.setAccessible(true);
+
+            return method.invoke(((MavenWorkingSessionContainer) resolver).getMavenWorkingSession());
+        } catch (IllegalAccessException | InvocationTargetException | NoSuchMethodException e) {
+            throw new RuntimeException("Failed to invoke " + methodName, e);
+        }
+    }
+
 }

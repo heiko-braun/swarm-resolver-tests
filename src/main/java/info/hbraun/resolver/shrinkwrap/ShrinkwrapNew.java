@@ -6,16 +6,12 @@ import java.util.Arrays;
 import java.util.List;
 
 import info.hbraun.resolver.Demo;
+import org.eclipse.aether.DefaultRepositorySystemSession;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
-import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
 import org.jboss.shrinkwrap.resolver.api.maven.PomEquippedResolveStage;
-import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenChecksumPolicy;
-import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepositories;
-import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepository;
-import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenUpdatePolicy;
+import org.wildfly.swarm.arquillian.resolver.FailureReportingTransferListener;
 import org.wildfly.swarm.arquillian.resolver.ShrinkwrapArtifactResolvingHelper;
-import org.wildfly.swarm.spi.api.internal.SwarmInternalProperties;
 
 /**
  * @author Heiko Braun
@@ -25,7 +21,10 @@ public class ShrinkwrapNew implements Demo {
     @Override
     public void execute(File pomFile) throws Exception {
 
-        ConfigurableMavenResolverSystem resolver = createResolver();
+        ConfigurableMavenResolverSystem resolver = ShrinkwrapDemo.RESOLVER_INSTANCE;
+
+        DefaultRepositorySystemSession session = ShrinkwrapDemo.session(resolver);
+        session.setTransferListener(new FailureReportingTransferListener());
 
         ShrinkwrapArtifactResolvingHelper resolvingHelper = new ShrinkwrapArtifactResolvingHelper(resolver);
         PomEquippedResolveStage pomEquipped = loadPom(resolver, pomFile);
@@ -63,51 +62,5 @@ public class ShrinkwrapNew implements Demo {
         return resolver.loadPomFromFile(pom);
     }
 
-    public static ConfigurableMavenResolverSystem createResolver() {
-        MavenRemoteRepository jbossPublic =
-                MavenRemoteRepositories.createRemoteRepository("jboss-public-repository-group",
-                                                               "http://repository.jboss.org/nexus/content/groups/public/",
-                                                               "default");
-        jbossPublic.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
-        jbossPublic.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_NEVER);
 
-
-        MavenRemoteRepository gradleTools =
-                MavenRemoteRepositories.createRemoteRepository("gradle",
-                                                               "http://repo.gradle.org/gradle/libs-releases-local",
-                                                               "default");
-        gradleTools.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
-        gradleTools.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_NEVER);
-
-
-        String localM2 = System.getProperty("user.home") + File.separator + ".m2" + File.separator + "repository/";
-        MavenRemoteRepository local =
-                       MavenRemoteRepositories.createRemoteRepository("local",
-                                                                      "file://"+localM2,
-                                                                      "default");
-        local.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
-        local.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_ALWAYS);
-
-        Boolean offline = Boolean.valueOf(System.getProperty("swarm.resolver.offline", "false"));
-        final ConfigurableMavenResolverSystem resolver = Maven.configureResolver()
-                .withMavenCentralRepo(true)
-                .withRemoteRepo(local)
-                .withRemoteRepo(jbossPublic)
-                .withRemoteRepo(gradleTools)
-                .workOffline(offline);
-
-        final String additionalRepos = System.getProperty(SwarmInternalProperties.BUILD_REPOS);
-        if (additionalRepos != null) {
-            Arrays.asList(additionalRepos.split(","))
-                    .forEach(r -> {
-                        MavenRemoteRepository repo =
-                                MavenRemoteRepositories.createRemoteRepository(r, r, "default");
-                        repo.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
-                        repo.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_NEVER);
-                        resolver.withRemoteRepo(repo);
-                    });
-        }
-
-        return resolver;
-    }
 }
