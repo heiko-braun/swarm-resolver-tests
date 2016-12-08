@@ -2,17 +2,23 @@ package info.hbraun.resolver.shrinkwrap;
 
 import java.io.File;
 import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import info.hbraun.resolver.Demo;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
+import org.jboss.shrinkwrap.resolver.api.maven.MavenWorkingSession;
 import org.jboss.shrinkwrap.resolver.api.maven.PomEquippedResolveStage;
+import org.jboss.shrinkwrap.resolver.api.maven.ScopeType;
 import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenCoordinate;
+import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenDependency;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenChecksumPolicy;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepositories;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepository;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenUpdatePolicy;
+import org.jboss.shrinkwrap.resolver.impl.maven.MavenWorkingSessionContainer;
 import org.wildfly.swarm.arquillian.resolver.ShrinkwrapArtifactResolvingHelper;
 import org.wildfly.swarm.spi.api.internal.SwarmInternalProperties;
 import org.wildfly.swarm.tools.ArtifactSpec;
@@ -30,6 +36,17 @@ public class ShrinkwrapDemo implements Demo {
         ShrinkwrapArtifactResolvingHelper resolvingHelper = new ShrinkwrapArtifactResolvingHelper(resolver);
         PomEquippedResolveStage pomEquipped = loadPom(resolver, pomFile);
 
+        /*
+        MavenWorkingSession session = ((MavenWorkingSessionContainer) resolver).getMavenWorkingSession();
+                        Set<MavenDependency> explicitDeps = session.getDeclaredDependencies()
+                                .stream()
+                                .filter(dep -> (
+                                        dep.getScope().equals(ScopeType.RUNTIME)
+                                        || dep.getScope().equals(ScopeType.COMPILE)
+                                        || dep.getScope().equals(ScopeType.TEST))
+                                )
+                                .collect(Collectors.toSet());
+*/
         // NonTransitiveStrategy
         final MavenResolvedArtifact[] explicitDeps =
                 resolvingHelper.withResolver(r -> pomEquipped
@@ -94,9 +111,19 @@ public class ShrinkwrapDemo implements Demo {
         gradleTools.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
         gradleTools.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_NEVER);
 
+
+        String localM2 = System.getProperty("user.home") + File.separator + ".m2" + File.separator + "repository/";
+        MavenRemoteRepository local =
+                       MavenRemoteRepositories.createRemoteRepository("local",
+                                                                      "file://"+localM2,
+                                                                      "default");
+        local.setChecksumPolicy(MavenChecksumPolicy.CHECKSUM_POLICY_IGNORE);
+        local.setUpdatePolicy(MavenUpdatePolicy.UPDATE_POLICY_ALWAYS);
+
         Boolean offline = Boolean.valueOf(System.getProperty("swarm.resolver.offline", "false"));
         final ConfigurableMavenResolverSystem resolver = Maven.configureResolver()
                 .withMavenCentralRepo(true)
+                .withRemoteRepo(local)
                 .withRemoteRepo(jbossPublic)
                 .withRemoteRepo(gradleTools)
                 .workOffline(offline);

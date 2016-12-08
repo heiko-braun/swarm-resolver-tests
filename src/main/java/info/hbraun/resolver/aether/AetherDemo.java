@@ -4,7 +4,6 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -42,9 +41,9 @@ public class AetherDemo implements Demo {
 
     public void execute(File pomFile) throws Exception {
         MavenProject proj = loadFromPom(pomFile);
-        List<org.apache.maven.model.Dependency> explicitDeps = proj.getDependencies();
+        final List<org.apache.maven.model.Dependency> explicitDeps = proj.getDependencies();
 
-        List<Dependency>  aetherDeps = explicitDeps
+        List<Dependency> aetherDeps = explicitDeps
                 .stream()
                 .map( d -> {
                     String version = d.getVersion() !=null ? d.getVersion() : "2017.1.0-SNAPSHOT";
@@ -54,11 +53,26 @@ public class AetherDemo implements Demo {
                 .collect(Collectors.toList());
 
         List<ArtifactResult> transientDeps = resolveTransient(aetherDeps);
+        List<ArtifactResult> resolvedExplicitDeps = transientDeps.stream()
+                .filter(d -> isDirectDep(d, explicitDeps))
+                .collect(Collectors.toList());
 
         System.out.println(getClass().getSimpleName());
-        System.out.println("Direct: "+explicitDeps.size());
+        System.out.println("Direct: "+resolvedExplicitDeps.size());
         System.out.println("Transitive: "+transientDeps.size());
         System.out.println();
+    }
+
+    private boolean isDirectDep(ArtifactResult aetherDep, List<org.apache.maven.model.Dependency> explicitDeps) {
+        boolean match = false;
+        for(org.apache.maven.model.Dependency mavenDep : explicitDeps) {
+            if(aetherDep.getArtifact().getArtifactId().equals(mavenDep.getArtifactId())
+                    && aetherDep.getArtifact().getGroupId().equals(mavenDep.getGroupId())) {
+                match = true;
+                break;
+            }
+        }
+        return match;
     }
 
     private List<ArtifactResult> resolveTransient(List<Dependency> deps) throws  Exception {
