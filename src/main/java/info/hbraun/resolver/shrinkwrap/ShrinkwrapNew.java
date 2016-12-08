@@ -1,27 +1,27 @@
 package info.hbraun.resolver.shrinkwrap;
 
 import java.io.File;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.List;
 
 import info.hbraun.resolver.Demo;
 import org.jboss.shrinkwrap.resolver.api.maven.ConfigurableMavenResolverSystem;
 import org.jboss.shrinkwrap.resolver.api.maven.Maven;
 import org.jboss.shrinkwrap.resolver.api.maven.MavenResolvedArtifact;
 import org.jboss.shrinkwrap.resolver.api.maven.PomEquippedResolveStage;
-import org.jboss.shrinkwrap.resolver.api.maven.coordinate.MavenCoordinate;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenChecksumPolicy;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepositories;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenRemoteRepository;
 import org.jboss.shrinkwrap.resolver.api.maven.repository.MavenUpdatePolicy;
 import org.wildfly.swarm.arquillian.resolver.ShrinkwrapArtifactResolvingHelper;
 import org.wildfly.swarm.spi.api.internal.SwarmInternalProperties;
-import org.wildfly.swarm.tools.ArtifactSpec;
 
 /**
  * @author Heiko Braun
  * @since 06/12/2016
  */
-public class ShrinkwrapDemo implements Demo {
+public class ShrinkwrapNew implements Demo {
     @Override
     public void execute(File pomFile) throws Exception {
 
@@ -30,58 +30,32 @@ public class ShrinkwrapDemo implements Demo {
         ShrinkwrapArtifactResolvingHelper resolvingHelper = new ShrinkwrapArtifactResolvingHelper(resolver);
         PomEquippedResolveStage pomEquipped = loadPom(resolver, pomFile);
 
-        /*
-        MavenWorkingSession session = ((MavenWorkingSessionContainer) resolver).getMavenWorkingSession();
-                        Set<MavenDependency> explicitDeps = session.getDeclaredDependencies()
-                                .stream()
-                                .filter(dep -> (
-                                        dep.getScope().equals(ScopeType.RUNTIME)
-                                        || dep.getScope().equals(ScopeType.COMPILE)
-                                        || dep.getScope().equals(ScopeType.TEST))
-                                )
-                                .collect(Collectors.toSet());
-*/
         // NonTransitiveStrategy
         final MavenResolvedArtifact[] explicitDeps =
-                resolvingHelper.withResolver(r -> pomEquipped
+                 resolvingHelper.withResolver(r -> pomEquipped
                         .importRuntimeAndTestDependencies()
                         .resolve()
                         .withoutTransitivity()
                         .asResolvedArtifact()
-                );
-
-        for (MavenResolvedArtifact dep : explicitDeps) {
-            MavenCoordinate coord = dep.getCoordinate();
-            ArtifactSpec artifactSpec = new ArtifactSpec(
-                    dep.getScope().name(), coord.getGroupId(),
-                    coord.getArtifactId(), coord.getVersion(),
-                    coord.getPackaging().getExtension(), coord.getClassifier(), dep.asFile()
-            );
-
-        }
+                 );
 
         // TransitiveStrategy
-
-        final MavenResolvedArtifact[] transientDeps =
-                resolvingHelper.withResolver(r -> pomEquipped
-                        .importRuntimeAndTestDependencies()
-                        .resolve()
-                        .withTransitivity()
-                        .asResolvedArtifact());
-
-        for (MavenResolvedArtifact dep : transientDeps) {
-            MavenCoordinate coord = dep.getCoordinate();
-            ArtifactSpec artifactSpec = new ArtifactSpec(
-                    dep.getScope().name(), coord.getGroupId(),
-                    coord.getArtifactId(), coord.getVersion(),
-                    coord.getPackaging().getExtension(), coord.getClassifier(), dep.asFile()
+        // buckets
+        List<MavenResolvedArtifact> transientDeps = new ArrayList<>();
+        for (MavenResolvedArtifact directDep : explicitDeps) {
+            MavenResolvedArtifact[] bucket = resolvingHelper.withResolver(
+                    r -> pomEquipped
+                    .resolve(directDep.getCoordinate().toCanonicalForm())
+                    .withTransitivity()
+                    .asResolvedArtifact()
             );
 
+            transientDeps.addAll(Arrays.asList(bucket));
         }
 
         System.out.println(getClass().getSimpleName());
         System.out.println("Direct: "+explicitDeps.length);
-        System.out.println("Transitive: "+transientDeps.length);
+        System.out.println("Transitive: "+transientDeps.size());
         System.out.println();
     }
 
